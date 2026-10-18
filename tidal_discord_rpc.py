@@ -350,7 +350,8 @@ def pad(s: str) -> str:
 async def worker():
     rpc = None
     last_key = None
-    last_start = 0.0
+    last_position = None
+    last_position_mono = None
     poll = float(CFG["poll_seconds"])
     # compare against the literal text, so editing PLACEHOLDER_ID cannot break this
     configured = str(CFG["discord_client_id"]).strip() not in ("", "YOUR_APPLICATION_ID")
@@ -406,12 +407,29 @@ async def worker():
         tl = session.get_timeline_properties()
         pos = tl.position.total_seconds()
         dur = (tl.end_time - tl.start_time).total_seconds()
-        start = time.time() - pos
-        key = (props.artist, props.title, props.album_title)
 
-        # Only update on track change or when the user seeks (avoids rate limits)
-        if key == last_key and abs(start - last_start) < 3:
+        key = (props.artist, props.title, props.album_title)
+        now_mono = time.monotonic()
+
+        track_changed = key != last_key
+        seeked = False
+
+        if (
+                not track_changed
+                and last_position is not None
+                and last_position_mono is not None
+        ):
+            expected_pos = last_position + (now_mono - last_position_mono)
+
+            seeked = abs(pos - expected_pos) > 4
+
+        last_position = pos
+        last_position_mono = now_mono
+
+        if not track_changed and not seeked:
             continue
+
+        start = time.time() - pos
 
         if key != last_key:
             log(f"Track: artist={props.artist!r} title={props.title!r} "
@@ -454,7 +472,7 @@ async def worker():
             )
             if key != last_key:
                 log(f"Presence updated, large_image={cover or CFG['fallback_image']}")
-            last_key, last_start = key, start
+            last_key = key
         except Exception:
             log("Presence update failed:\n" + traceback.format_exc())
             rpc = None  # connection lost; reconnect on next tick
