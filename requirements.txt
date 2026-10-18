@@ -1,0 +1,7 @@
+pypresence>=4.3.0
+pystray>=0.19.5
+pillow>=10.0.0
+winrt-runtime
+winrt-Windows.Media.Control
+winrt-Windows.Foundation
+winrt-Windows.Foundation.Collections
